@@ -92,6 +92,12 @@ function rescoreBucket(bucket, nowSec) {
   });
 }
 
+function drlog() {
+  var a = Array.prototype.slice.call(arguments);
+  a.unshift('%c[Baratilyo:bg]', 'color:#f97316;font-weight:700');
+  console.log.apply(console, a);
+}
+
 function ingest(listings) {
   if (settings.paused || !listings || !listings.length) return Promise.resolve([]);
   var nowMs = Date.now(), nowSec = Math.floor(nowMs / 1000);
@@ -109,7 +115,9 @@ function ingest(listings) {
       var flat = [].concat.apply([], groups);
       maybeNotify(flat);
       var wanted = new Set(ids);
-      return flat.filter(function (r) { return wanted.has(r.id); }).map(slim);
+      var out = flat.filter(function (r) { return wanted.has(r.id); }).map(slim);
+      drlog('ingested ' + listings.length + ', scored ' + out.length + ', buckets touched ' + groups.length);
+      return out;
     });
   });
 }
@@ -219,7 +227,9 @@ api.runtime.onMessage.addListener(function (msg, sender) {
   if (!msg || !msg.kind) return;
   switch (msg.kind) {
     case 'listings':
-      return ingest(msg.payload.listings).then(function (scores) { return { scores: scores }; });
+      return ingest(msg.payload.listings)
+        .then(function (scores) { return { scores: scores }; })
+        .catch(function (e) { drlog('INGEST FAILED', e); return { scores: [], error: String(e) }; });
     case 'getScores':
       return Promise.all((msg.payload.ids || []).map(function (id) { return DB.get('listings', id); }))
         .then(function (rows) { return { scores: rows.filter(Boolean).map(slim) }; });

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Baratilyo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Spots underpriced Facebook Marketplace listings by learning what things normally sell for.",
   "browser_specific_settings": {
     "gecko": {
@@ -66,5 +66,15 @@
   "icons": {
     "48": "icons/icon48.png",
     "96": "icons/icon96.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/hook.js"
+      ],
+      "matches": [
+        "*://*.facebook.com/*"
+      ]
+    }
+  ]
 }
