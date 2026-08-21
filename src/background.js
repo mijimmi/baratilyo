@@ -16,17 +16,42 @@ var DEFAULTS = {
   paused: false
 };
 
+var BOUNDS = {
+  minDiscount: [5, 80],
+  minComps: [3, 50],
+  maxSellerJoinYear: [2004, 2100],
+  notifyMinScore: [0, 100],
+  keepDays: [7, 365],
+  enrichIntervalSec: [5, 120],
+  enrichPerRun: [1, 10]
+};
+
+/* A NaN keepDays reaches IDBKeyRange.lowerBound() and throws, so every
+   numeric setting gets clamped back to sane before it is trusted. */
+function sanitizeSettings(s) {
+  var out = Object.assign({}, s);
+  Object.keys(BOUNDS).forEach(function (k) {
+    var n = parseInt(out[k], 10);
+    if (!isFinite(n)) n = DEFAULTS[k];
+    out[k] = Math.max(BOUNDS[k][0], Math.min(BOUNDS[k][1], n));
+  });
+  if (['off', 'flag', 'require'].indexOf(out.sellerGate) === -1) out.sellerGate = DEFAULTS.sellerGate;
+  out.notify = out.notify !== false;
+  out.paused = !!out.paused;
+  return out;
+}
+
 var settings = Object.assign({}, DEFAULTS);
 var notified = new Set();
 
 function loadSettings() {
   return api.storage.local.get('settings').then(function (r) {
-    settings = Object.assign({}, DEFAULTS, r.settings || {});
+    settings = sanitizeSettings(Object.assign({}, DEFAULTS, r.settings || {}));
     return settings;
   });
 }
 function saveSettings(patch) {
-  settings = Object.assign({}, settings, patch || {});
+  settings = sanitizeSettings(Object.assign({}, settings, patch || {}));
   return api.storage.local.set({ settings: settings }).then(function () { return settings; });
 }
 
@@ -56,7 +81,11 @@ function mergeListing(existing, incoming, nowMs) {
   var p = incoming.price;
   if (typeof p === 'number' && isFinite(p) && p > 0) {
     var last = l.priceHistory.length ? l.priceHistory[l.priceHistory.length - 1].price : null;
-    if (last === null || Math.abs(last - p) > 0.5) l.priceHistory.push({ t: nowMs, price: p });
+    if (last === null || Math.abs(last - p) > 0.5) {
+      l.priceHistory.push({ t: nowMs, price: p });
+      /* keep the first entry (drop % is measured against it) and the recent tail */
+      if (l.priceHistory.length > 40) l.priceHistory.splice(1, l.priceHistory.length - 40);
+    }
     l.price = p;
   }
   l.lastSeen = nowMs;
@@ -173,6 +202,9 @@ function enrichCandidates(limit) {
     return rows.filter(function (r) {
       if (r.sellerJoinYear || r.sold) return false;
       if (r.sellerCheckState === 'done' || (r.sellerCheckTries || 0) >= 2) return false;
+      /* skip anything already queued recently — the alarm fires every minute
+         but a run's staggered lookups can take nearly that long */
+      if (r.sellerCheckState === 'pending' && Date.now() - (r.sellerCheckAt || 0) < 180000) return false;
       var interesting = (r.discountPct || 0) >= Math.max(8, settings.minDiscount - 8) || (r.dropPct || 0) >= 10;
       return interesting;
     }).sort(function (a, b) { return (b.score || 0) - (a.score || 0); }).slice(0, limit);
@@ -191,10 +223,13 @@ function runEnrichment() {
     if (!tab) return;
     return enrichCandidates(settings.enrichPerRun).then(function (cands) {
       cands.forEach(function (c, i) {
+        /* claim the listing now, not when the timeout fires — otherwise the
+           next alarm run selects the same candidates and doubles the requests */
+        c.sellerCheckTries = (c.sellerCheckTries || 0) + 1;
+        c.sellerCheckState = 'pending';
+        c.sellerCheckAt = Date.now();
+        DB.put('listings', c);
         setTimeout(function () {
-          c.sellerCheckTries = (c.sellerCheckTries || 0) + 1;
-          c.sellerCheckState = 'pending';
-          DB.put('listings', c);
           api.tabs.sendMessage(tab.id, { kind: 'enrich', payload: { id: c.id, sellerId: c.sellerId } })
             .catch(function () { });
         }, i * settings.enrichIntervalSec * 1000 + Math.random() * 2500);
