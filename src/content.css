@@ -1,0 +1,19 @@
+.dr-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 9999;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font: 700 11px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  letter-spacing: .2px;
+  color: #04140a;
+  background: #a3a3a3;
+  box-shadow: 0 1px 3px rgba(0,0,0,.35);
+  pointer-events: none;
+  user-select: none;
+}
+.dr-badge.dr-hot  { background: #22c55e; color: #052e16; }
+.dr-badge.dr-good { background: #86efac; color: #052e16; }
+.dr-badge.dr-warn { background: #f97316; color: #1c0a00; }
+.dr-badge.dr-meh  { background: rgba(120,120,120,.85); color: #fff; }

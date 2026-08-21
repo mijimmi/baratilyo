@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="dot"></span>
+      <strong>Baratilyo</strong>
+    </div>
+    <div class="stats" id="stats">–</div>
+  </header>
+
+  <div class="controls">
+    <input id="q" type="search" placeholder="filter by title…" autocomplete="off">
+    <select id="minScore">
+      <option value="0">any score</option>
+      <option value="45">45+</option>
+      <option value="60" selected>60+</option>
+      <option value="75">75+ hot</option>
+    </select>
+  </div>
+
+  <div id="list" class="list"></div>
+  <div id="empty" class="empty">
+    Nothing yet. Just browse Marketplace like normal — Baratilyo learns what things usually cost from the listings you scroll past, then starts flagging the odd ones out.
+  </div>
+
+  <details id="settings">
+    <summary>Settings</summary>
+    <div class="row">
+      <label>Min discount vs median</label>
+      <input type="number" id="minDiscount" min="5" max="80" step="1">
+      <span class="unit">%</span>
+    </div>
+    <div class="row">
+      <label>Min comps before trusting a baseline</label>
+      <input type="number" id="minComps" min="3" max="50" step="1">
+    </div>
+    <div class="row">
+      <label>Seller account must be from</label>
+      <input type="number" id="maxSellerJoinYear" min="2004" max="2026" step="1">
+      <span class="unit">or earlier</span>
+    </div>
+    <div class="row">
+      <label>Seller age rule</label>
+      <select id="sellerGate">
+        <option value="off">ignore</option>
+        <option value="flag">hide new accounts</option>
+        <option value="require">require verified old</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Desktop alerts at score</label>
+      <input type="number" id="notifyMinScore" min="0" max="100" step="5">
+    </div>
+    <div class="row">
+      <label>Keep history for</label>
+      <input type="number" id="keepDays" min="7" max="365" step="1">
+      <span class="unit">days</span>
+    </div>
+    <div class="row">
+      <label>Seconds between seller lookups</label>
+      <input type="number" id="enrichIntervalSec" min="5" max="120" step="1">
+    </div>
+    <div class="row check">
+      <label><input type="checkbox" id="paused"> pause collection</label>
+    </div>
+    <div class="btns">
+      <button id="save" class="primary">Save</button>
+      <button id="enrich">Check sellers now</button>
+      <button id="export">Export JSON</button>
+      <button id="clear" class="danger">Clear data</button>
+    </div>
+  </details>
+
+  <script src="popup.js"></script>
+</body>
+</html>
