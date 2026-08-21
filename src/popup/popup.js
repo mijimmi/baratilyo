@@ -99,7 +99,10 @@ function loadSettings() {
 
 $('save').addEventListener('click', function () {
   var patch = { sellerGate: $('sellerGate').value, paused: $('paused').checked, notify: true };
-  FIELDS.forEach(function (f) { patch[f] = parseInt($(f).value, 10); });
+  FIELDS.forEach(function (f) {
+    var n = parseInt($(f).value, 10);
+    if (isFinite(n)) patch[f] = n;
+  });
   $('save').textContent = 'Saving…';
   api.runtime.sendMessage({ kind: 'setSettings', payload: patch }).then(function () {
     $('save').textContent = 'Saved';
@@ -118,8 +121,9 @@ $('export').addEventListener('click', function () {
   api.runtime.sendMessage({ kind: 'exportAll' }).then(function (r) {
     var blob = new Blob([JSON.stringify((r && r.rows) || [], null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
-    api.downloads ? api.downloads.download({ url: url, filename: 'baratilyo-export.json' })
-      : window.open(url, '_blank');
+    var cleanup = function () { setTimeout(function () { URL.revokeObjectURL(url); }, 10000); };
+    if (api.downloads) api.downloads.download({ url: url, filename: 'baratilyo-export.json' }).then(cleanup, cleanup);
+    else { window.open(url, '_blank'); cleanup(); }
   });
 });
 

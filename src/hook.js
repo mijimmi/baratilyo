@@ -8,6 +8,15 @@
   window.__DR_HOOKED__ = true;
 
   var TAG = 'DR_HOOK';
+  var DEBUG = true;
+  var diag = { world: 'unknown', gql: 0, gqlMarketplaceish: 0, parsed: 0, listings: 0, lastSample: null, lastKeys: null };
+  window.__DR_DIAG = diag;
+  function log() {
+    if (!DEBUG) return;
+    var a = Array.prototype.slice.call(arguments);
+    a.unshift('%c[Baratilyo]', 'color:#22c55e;font-weight:700');
+    console.log.apply(console, a);
+  }
   var MAX_NODES = 250000;
   var tokens = { fb_dtsg: null, lsd: null, docIds: {} };
 
@@ -147,14 +156,38 @@
 
   function handleBody(url, text) {
     if (!text || text.length < 40) return;
+    diag.gql++;
+    var marketplaceish = text.indexOf('marketplace_listing_title') !== -1
+      || text.indexOf('listing_price') !== -1
+      || text.indexOf('marketplace_listing') !== -1;
+    if (marketplaceish) diag.gqlMarketplaceish++;
+
     var docs = parseChunks(text);
-    if (!docs.length) return;
+    if (!docs.length) {
+      if (marketplaceish) log('response looked like marketplace data but would not parse as JSON', url);
+      return;
+    }
+    diag.parsed++;
+
     var all = [];
     for (var i = 0; i < docs.length; i++) {
       var got = collect(docs[i]);
       if (got.length) all = all.concat(got);
     }
-    if (all.length) send('listings', { url: url, listings: all, at: Date.now() });
+
+    if (all.length) {
+      diag.listings += all.length;
+      log('+' + all.length + ' listings (total ' + diag.listings + ')', all[0].title, all[0].price);
+      send('listings', { url: url, listings: all, at: Date.now() });
+    } else if (marketplaceish) {
+      /* the payload smells like listings but nothing matched -> capture a sample
+         so the shape can be compared against looksLikeListing() */
+      diag.lastSample = text.slice(0, 30000);
+      try { diag.lastKeys = Object.keys(docs[0] && docs[0].data ? docs[0].data : docs[0]).slice(0, 25); } catch (e) { }
+      log('EXTRACTOR MISS — marketplace-shaped response, 0 listings pulled out.',
+        '\ntop-level keys:', diag.lastKeys,
+        '\nrun copy(__DR_DIAG.lastSample) to grab the payload');
+    }
   }
 
   function captureTokens(body) {
@@ -273,6 +306,19 @@
     if (!d || !d.__dr || d.dir !== 'cs->page') return;
     if (d.kind === 'enrich') enrich(d.payload);
   });
+
+  /* Are we actually in the page world? If the manifest's world:"MAIN" was
+     ignored, our patched fetch is the isolated one and captures nothing. */
+  try {
+    diag.world = (typeof wrappedJSObject === 'undefined' && window.location && !window.browser) ? 'page(likely)' : 'page';
+  } catch (e) { diag.world = 'page'; }
+
+  log('hook installed on', location.pathname, '— type __DR_DIAG in this console any time');
+  setInterval(function () {
+    if (!DEBUG) return;
+    log('diag:', 'graphql seen ' + diag.gql, '| marketplace-shaped ' + diag.gqlMarketplaceish,
+      '| listings pulled ' + diag.listings);
+  }, 15000);
 
   send('ready', { url: location.href });
 })();
